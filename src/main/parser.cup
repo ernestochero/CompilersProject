@@ -1,0 +1,175 @@
+/* ----------------------Preliminary Declarations Section--------------------*/
+
+/* Import the class java_cup.runtime.*  */
+
+package main;
+import java_cup.runtime.*;
+
+
+/* Parser code to change the way the parser reports errors (include
+   line and column INT of the error). */
+parser code {:
+
+    
+
+    public void report_error(String message, Object info) {
+
+        StringBuilder m = new StringBuilder("Error");
+
+        if (info instanceof java_cup.runtime.Symbol) {
+
+            java_cup.runtime.Symbol s = ((java_cup.runtime.Symbol) info);
+
+            if (s.left >= 0) {
+
+                m.append(" in line "+(s.left+1));
+
+                if (s.right >= 0)
+
+                    m.append(", column "+(s.right+1));
+            }
+        }
+
+        m.append(" : "+message);
+        System.err.println(m);
+    }
+
+    public void report_fatal_error(String message, Object info) {
+        report_error(message, info);
+        System.exit(1);
+    }
+:};
+
+action code {:
+         private static char tipo(Object o){
+         if (o == null) return 'i';
+         else if (o instanceof Integer) return 'e';
+         else return 'c';
+        }
+:}
+
+
+/* ------------Declaration of Terminals and Non Terminals Section----------- */
+terminal           PLUS, MINUS, TIMES, DIVIDE, PUNTOYCOMA;
+terminal           PRINT,LPAREN, RPAREN,ASIG,A_ENTERO, A_CADENA;
+terminal Integer   INT;
+terminal String    CADENA;
+terminal Simbolo   ID;
+
+
+non terminal asig;
+non terminal Object E;
+non terminal Integer T;
+non terminal Integer F;
+
+non terminal  S;
+
+/*
+non terminal E     E;
+non terminal T     T;
+non terminal F     F;
+*/
+/* -------------Precedence and Associatively of Terminals Section----------- */
+
+  precedence left PLUS, MINUS;
+  precedence left TIMES, DIVIDE;
+
+/* ----------------------------Grammar Section-------------------- */
+
+/* The grammar for our parser.
+
+S ::= S asig PUNTOYCOMA | S E PUNTOYCOMA ;
+asig ::= ID ASIG E | ID ASIG asig
+E ::= E + T | E - T | T
+T ::= T * F | T / F | F
+F ::= (E) | INT | ID
+*/
+
+
+S ::= S asig PUNTOYCOMA {: System.out.println("Asignacion(es) efectuada(s)."); :}
+      |S PRINT E:e PUNTOYCOMA {: 
+            if (tipo(e) == 'i') System.out.println("Indefinido."); 
+            else System.out.println(e.toString());
+            :}
+      |S error PUNTOYCOMA
+      |
+      ;
+
+asig ::= ID:id ASIG E:e {:
+                            if(tipo(e) == 'i'){System.out.println("Asignacion no efectuada.");}
+                            else if ((id.valor == null) || (tipo(id.valor) == tipo(e))) {  id.valor = e;}
+                            else {System.err.println("Asignacion de tipos incompatibles.");}
+                               
+                        :}
+        | ID:id ASIG asig:a {:
+                            RESULT = a;
+                            id.valor = a;
+:};
+
+
+E ::= E:e PLUS T:t {:
+
+if((tipo(e) == 'c') && (tipo(t) == 'c')) { RESULT = e.toString() + t.toString();}
+
+else if((tipo(e) == 'e') && (tipo(t) == 'e')){ RESULT = new Integer( ((Integer)e).intValue() + ((Integer)t).intValue());}
+
+else {RESULT = null; if ((tipo(e) != 'i') && (tipo(t) != 'i')){System.err.println("No se pueden sumar cadenas y enteros.");}} 
+:}
+|
+E:t TIMES T:f {: 
+
+if((tipo(t) == 'c') || (tipo(f) == 'c')) { RESULT = null; System.err.println("Una cadena no se puede multiplicar."); }
+
+else if((tipo(t) == 'e') && (tipo(f) == 'e')){ RESULT = new Integer( ((Integer)t).intValue() * ((Integer)f).intValue()); }
+
+else {RESULT = null;}
+
+:}
+|
+A_ENTERO LPAREN E:e RPAREN{:
+if (tipo(e) != 'c') { RESULT = null; System.err.println("Error de conversión. Se requiere una cadena.");
+}else try { RESULT = new Integer(Integer.parseInt(e.toString())); }catch (Exception x){ RESULT = null; System.err.println("La cadena a convertir sólo puede tener dígitos.");}
+:}
+|
+A_CADENA LPAREN E:e RPAREN {: 
+if (tipo(e) != 'e') { RESULT = null; System.err.println("Error de conversión. Se requiere un entero.");} 
+else{RESULT = (Integer) e;} 
+:}
+|
+ID:s {: 
+RESULT = s.valor; 
+if (tipo(s.valor) == 'i'){System.err.println("Tipo de "+ s.nombre +" no definido.");}
+
+:}
+| CADENA:c {: RESULT = c; :}
+| INT:i {: RESULT = i; :}
+;
+
+
+/*
+E ::= E:e PLUS T:t {: RESULT = new Integer( e.intValue() + t.intValue() ); :}
+      | E:e MINUS T:t {: RESULT = new Integer( e.intValue() - t.intValue() ); :}
+      | T:t {: RESULT = new Integer( t.intValue() ); :};
+
+T ::= T:t TIMES F:f {: RESULT = new Integer( t.intValue() * f.intValue() ); :}
+      | T:t DIVIDE F:f {: RESULT = new Integer( t.intValue() / f.intValue() ); :}
+      | F:f {: RESULT = new Integer( f.intValue() ); :};
+
+F ::= LPAREN E:e RPAREN {: RESULT = e; :}
+      | INT:i {: RESULT = i; :}
+      | ID:s {: RESULT = s.valor; :};
+
+*/
+/*
+  E ::= E:l PLUS T:r {: RESULT = new PlusE(l,r); :} 
+        | E:l MINUS T:r  {: RESULT = new MinusE(l,r); :} 
+        | T:t {: RESULT = new TE(t); :} ;
+
+  T ::= T:l TIMES F:r {: RESULT = new MultiplyT(l,r); :} 
+        | T:l DIVIDE F:r {: RESULT = new DivideT(l,r); :} 
+        | F:f {: RESULT = new FT(f); :} ;
+
+  F ::= LPAREN E:e RPAREN {: RESULT = new FBRACKET(e); :} 
+        | INT:i {: RESULT = i; :}  
+        | ID:s {: RESULT = s.valor; :} ;
+*/
